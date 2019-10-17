@@ -2,7 +2,7 @@ $:.push File.expand_path("../lib", __FILE__)
 
 Gem::Specification.new do |s|
   s.name          = "fluent-plugin-out_rawtcp-godel"
-  s.version       = `cat VERSION`
+  s.version       = "0.0.3"
   s.authors       = ["lxfontes"]
   s.email         = ["lxfontes+rawtcp@gmail.com"]
   s.description   = %q{Raw tcp output plugin for Fluentd}

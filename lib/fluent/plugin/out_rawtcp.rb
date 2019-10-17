@@ -8,7 +8,7 @@ module Fluent
       require 'socket'
       require 'timeout'
       require 'fileutils'
-      @nodes = []  #=> [Node]
+      @sockets = []  #=> [Socket]
     end
 
     config_param :send_timeout, :time, :default => 60
@@ -31,8 +31,12 @@ module Fluent
         unless name
           name = "#{host}:#{port}"
         end
-
-        @nodes << RawNode.new(name, host, port)
+        sock = connect(RawNode.new(name, host, port))
+        opt = [1, @send_timeout.to_i].pack('I!I!')  # { int l_onoff; int l_linger; }
+        sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_LINGER, opt)
+        opt = [@send_timeout.to_i, 0].pack('L!L!')  # struct timeval
+        sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, opt)
+        @sockets << sock
         log.info "adding forwarding server '#{name}'", :host=>host, :port=>port
       end
     end
@@ -54,9 +58,9 @@ module Fluent
 
       error = nil
 
-      @nodes.each do |node|
+      @sockets.each do |sock|
         begin
-          send_data(node, chunk)
+          send_data(sock, chunk)
           return
         rescue
           error = $!
@@ -68,21 +72,12 @@ module Fluent
     end
 
     private
-    def send_data(node, chunk)
-      sock = connect(node)
+    def send_data(sock, chunk)
       begin
-        opt = [1, @send_timeout.to_i].pack('I!I!')  # { int l_onoff; int l_linger; }
-        sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_LINGER, opt)
-
-        opt = [@send_timeout.to_i, 0].pack('L!L!')  # struct timeval
-        sock.setsockopt(Socket::SOL_SOCKET, Socket::SO_SNDTIMEO, opt)
-
         chunk.msgpack_each do |tag, time, record|
           next unless record.is_a? Hash
           sock.write(prepare_data_to_send(tag, time, record))
         end
-      ensure
-        sock.close
       end
     end
 
